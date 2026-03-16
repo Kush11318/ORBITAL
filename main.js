@@ -455,10 +455,18 @@ for (let i = 0; i < 4; i++) {
 
             if (this.isDream) {
                 // Pick a Dream Shape (Continuous curves)
-                const keys = Object.keys(dreamShapes);
+                const keys = Object.keys(zenConstellationShapes);
                 const key = keys[Math.floor(Math.random() * keys.length)];
-                const shapeObj = dreamShapes[key];
-                const strokes = shapeObj.strokes;
+                const rawPoints = zenConstellationShapes[key];
+                
+                // zenConstellationShapes are point pairs for LineSegments
+                // We'll treat each pair as a short stroke
+                const strokes = [];
+                for(let i=0; i<rawPoints.length; i+=2) {
+                    if (rawPoints[i] && rawPoints[i+1]) {
+                        strokes.push([rawPoints[i], rawPoints[i+1]]);
+                    }
+                }
 
                 this.targetStrokes = strokes; // An array of strokes
                 
@@ -466,29 +474,23 @@ for (let i = 0; i < 4; i++) {
                 this.line.material.color.setHex(0xffffff);
                 this.line.material.linewidth = 1;
                 
+                // Randomly position shapes
                 let cx, cy, cz, rotX, rotY, rotZ, scale;
-                if (shapeObj.isCentered) {
-                    cx = 0; cy = 0; cz = 0;
-                    rotX = 0;
-                    rotY = Math.random() * Math.PI * 2;
-                    rotZ = 0;
-                    scale = shapeObj.scale;
-                } else {
-                    // Coordinates that ensure visibility from camera at Z=8
-                    const radius = 20; 
-                    const theta = (Math.random() - 0.5) * 0.8; 
-                    const phi = (Math.PI / 2) + (Math.random() - 0.5) * 0.6; 
 
-                    cx = radius * Math.sin(phi) * Math.sin(theta);
-                    cy = radius * Math.cos(phi);
-                    cz = (Math.random() - 0.5) * 10; // Placed between Z -5 and Z 5
-                    
-                    scale = (Math.random() * 0.3 + 1.2) * shapeObj.scale; 
-                    
-                    rotX = (Math.random() - 0.5) * 0.3;
-                    rotY = (Math.random() - 0.5) * 0.3;
-                    rotZ = (Math.random() - 0.5) * 0.3;
-                }
+                // Coordinates that ensure visibility from camera at Z=8
+                const radius = 20; 
+                const theta = (Math.random() - 0.5) * 0.8; 
+                const phi = (Math.PI / 2) + (Math.random() - 0.5) * 0.6; 
+
+                cx = radius * Math.sin(phi) * Math.sin(theta);
+                cy = radius * Math.cos(phi);
+                cz = (Math.random() - 0.5) * 10; 
+                
+                scale = Math.random() * 0.5 + 1.2; 
+                
+                rotX = (Math.random() - 0.5) * 0.3;
+                rotY = (Math.random() - 0.5) * 0.3;
+                rotZ = (Math.random() - 0.5) * 0.3;
 
                 const dummy = new THREE.Object3D();
                 dummy.position.set(cx, cy, cz);
@@ -3132,6 +3134,8 @@ const initResearchExplorer = () => {
 
         let mission = source?.Project?.SpaceMission || source?.['Mission Name'] || source?.Project?.Name;
         if (!mission && source?.Mission) mission = typeof source.Mission === 'string' ? source.Mission : source.Mission.Name;
+        if (Array.isArray(mission)) mission = mission.filter(m => m).join(', ');
+        if (typeof mission !== 'string') mission = String(mission || '');
         if (!mission || mission.trim() === '') mission = 'EARTH_CONTROL / UNSPECIFIED';
 
         let organism = source?.Project?.Organism || source?.organism;
@@ -3195,6 +3199,8 @@ const initResearchExplorer = () => {
 
         let mission = source?.Project?.SpaceMission || source?.['Mission Name'] || source?.Project?.Name || source?.['Mission'];
         if (!mission && source?.Mission) mission = typeof source.Mission === 'string' ? source.Mission : source.Mission.Name;
+        if (Array.isArray(mission)) mission = mission.filter(m => m).join(', ');
+        if (typeof mission !== 'string') mission = String(mission || '');
         if (!mission || mission.trim() === '') mission = 'N/A';
 
         let desc = source?.Project?.ProjectDescription || source?.StudyDescription || source?.description || source?.['Project Description'] || source?.['Study Protocol Description'] || source?.['Study Description'] || 'No detailed description found in archive.';

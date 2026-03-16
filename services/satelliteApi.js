@@ -29,25 +29,49 @@ export async function searchSatellites(query) {
         }
     }
 
-    try {
-        // Use a high-reliability CORS proxy
-        const targetUrl = `${BASE_URL}?search=${encodeURIComponent(query)}`;
-        const response = await fetch(`${PROXY_URL}${encodeURIComponent(targetUrl)}`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+    const targetUrl = `${BASE_URL}?search=${encodeURIComponent(query)}`;
+    
+    const proxies = [
+        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        url => `https://thingproxy.freeboard.io/fetch/${url}`
+    ];
+    
+    let lastError = new Error("Failed to fetch satellite search");
+
+    for (const getProxyUrl of proxies) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            const response = await fetch(getProxyUrl(targetUrl), { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                lastError = new Error(`HTTP error! status: ${response.status}`);
+                continue;
+            }
+            
+            const data = await response.json();
+            
+            // Validate expected structure
+            if (!data || !data.member) {
+                lastError = new Error("Invalid payload structure received from proxy.");
+                continue;
+            }
+            
+            // Cache the successful response for the session
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            return data;
+        } catch (error) {
+            console.warn(`Satellite Proxy Failed: ${getProxyUrl(targetUrl)}`, error);
+            lastError = error;
         }
-        
-        const data = await response.json();
-        
-        // Cache the successful response for the session
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-        
-        return data;
-    } catch (error) {
-        console.error(`Failed to search satellites for "${query}":`, error);
-        throw error;
     }
+
+    console.error(`Failed to search satellites for "${query}":`, lastError);
+    throw lastError;
 }
 
 /**
@@ -70,22 +94,41 @@ export async function getSatelliteById(id) {
         }
     }
 
-    try {
-        const targetUrl = `${BASE_URL}/${id}`;
-        const response = await fetch(`${PROXY_URL}${encodeURIComponent(targetUrl)}`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+    const targetUrl = `${BASE_URL}/${id}`;
+    
+    const proxies = [
+        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        url => `https://thingproxy.freeboard.io/fetch/${url}`
+    ];
+    
+    let lastError = new Error("Failed to fetch satellite by ID");
+
+    for (const getProxyUrl of proxies) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            const response = await fetch(getProxyUrl(targetUrl), { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                lastError = new Error(`HTTP error! status: ${response.status}`);
+                continue;
+            }
+            
+            const data = await response.json();
+            
+            // Cache the successful response
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            return data;
+        } catch (error) {
+            console.warn(`Satellite Proxy Failed for ID ${id}: ${getProxyUrl(targetUrl)}`, error);
+            lastError = error;
         }
-        
-        const data = await response.json();
-        
-        // Cache the successful response
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-        
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch satellite ID "${id}":`, error);
-        throw error;
     }
+
+    console.error(`Failed to fetch satellite ID "${id}":`, lastError);
+    throw lastError;
 }
