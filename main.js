@@ -2371,9 +2371,9 @@ const initFireball = () => {
 
     const parseFBDate = (dateStr) => {
         if (!dateStr) return 0;
-        // Handle formats like "2026-03-15 12:00:00" -> "2026-03-15T12:00:00" for reliability
+        // NASA JPL dates are in UTC. Ensure they are parsed as such by adding 'Z'.
         const isoStr = dateStr.includes(' ') ? dateStr.replace(' ', 'T') : dateStr;
-        const d = new Date(isoStr);
+        const d = new Date(isoStr + 'Z');
         return isNaN(d.getTime()) ? 0 : d.getTime();
     };
 
@@ -2500,8 +2500,8 @@ const initFireball = () => {
         let filtered = [...allFireballs];
 
         const minEnergy = parseFloat(filterInput.value) || 0;
-        const startTime = startDateInput.value ? new Date(startDateInput.value).getTime() : 0;
-        const endTime = endDateInput.value ? new Date(endDateInput.value).getTime() + 86400000 : Infinity;
+        const startTime = startDateInput.value ? new Date(startDateInput.value + 'T00:00:00Z').getTime() : 0;
+        const endTime = endDateInput.value ? new Date(endDateInput.value + 'T23:59:59Z').getTime() : Infinity;
 
         filtered = filtered.filter(f => {
             const fbTime = parseFBDate(f.date);
@@ -2592,6 +2592,10 @@ const initFireball = () => {
             renderGrid();
         });
     }
+
+    // Add immediate listeners for better UX
+    if (sortSelect) sortSelect.addEventListener('change', renderGrid);
+    if (filterInput) filterInput.addEventListener('input', renderGrid);
 
     if (startDateInput && endDateInput) {
         const today = new Date();
@@ -2722,8 +2726,12 @@ function initDonkiTracker() {
                 return;
             }
 
-            // Sort newest first by time21_5
-            records.sort((a,b) => new Date(b.time21_5 || 0) - new Date(a.time21_5 || 0));
+            // Sort newest first by time21_5 (ensuring UTC comparison)
+            records.sort((a,b) => {
+                const timeA = a.time21_5 ? new Date(a.time21_5.endsWith('Z') ? a.time21_5 : a.time21_5 + 'Z').getTime() : 0;
+                const timeB = b.time21_5 ? new Date(b.time21_5.endsWith('Z') ? b.time21_5 : b.time21_5 + 'Z').getTime() : 0;
+                return timeB - timeA;
+            });
 
             countEl.textContent = records.length;
             // Limit states and pagination
@@ -3483,3 +3491,43 @@ if (navItems.length > 0 && sections.length > 0) {
         sectionObserver.observe(sec);
     });
 }
+
+// =========================================
+// LIVE HUD TELEMETRY UPDATES
+// =========================================
+const updateHUD = () => {
+    const timeEl = document.querySelector('.time-readout');
+    const dateEl = document.querySelector('.date-readout');
+    const coordsEl = document.querySelector('.coords-display');
+    
+    if (!timeEl || !dateEl) return;
+
+    const now = new Date();
+    
+    // Time: HH:MM:SS
+    timeEl.textContent = now.toTimeString().split(' ')[0];
+    
+    // Date: MAR.19.2026
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const month = months[now.getMonth()];
+    const day = String(now.getDate()).padStart(2, '0');
+    const year = now.getFullYear();
+    dateEl.textContent = `${month}.${day}.${year}`;
+
+    // Random coordinate jitter for "scanning" effect
+    if (coordsEl) {
+        // We add a tiny bit of random drift to make it look like a live scan
+        const baseLat = 45.5230; 
+        const baseLon = -122.6765;
+        const driftLat = (Math.random() * 0.05 - 0.025);
+        const driftLon = (Math.random() * 0.05 - 0.025);
+        
+        const lat = (baseLat + driftLat).toFixed(4);
+        const lon = (baseLon + driftLon).toFixed(4);
+        coordsEl.textContent = `${Math.abs(lat)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon)}° ${lon >= 0 ? 'E' : 'W'}`;
+    }
+};
+
+// Initial call and start interval
+updateHUD();
+setInterval(updateHUD, 1000);

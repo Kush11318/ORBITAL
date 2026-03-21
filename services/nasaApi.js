@@ -133,12 +133,11 @@ export async function getFireballEvents(options = {}) {
     if (maxDate) targetUrl += `date-max=${maxDate}&`;
     targetUrl = targetUrl.replace(/&$/, ''); // clean trailing amper
     
-    // Attempt multiple proxies for high reliability
+    // Attempt direct fetch first, then fallback to proxies
     const proxies = [
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        url => `https://thingproxy.freeboard.io/fetch/${url}`,
-        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        url => `https://corsproxy.io/?${encodeURIComponent(url)}`
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
     ];
 
     for (const getProxyUrl of proxies) {
@@ -170,9 +169,17 @@ export async function getFireballEvents(options = {}) {
             }
             
             // Normalize the JPL array-of-arrays response
-            const fields = data.fields;
-            if (!data.data) throw new Error("No data in response");
+            if (data.count === "0" || !data.data || data.data.length === 0) {
+                const emptyResult = {
+                    signature: data.signature,
+                    count: 0,
+                    events: []
+                };
+                sessionStorage.setItem(CACHE_FIREBALL_KEY, JSON.stringify(emptyResult));
+                return emptyResult;
+            }
 
+            const fields = data.fields || [];
             const normalized = data.data.map(row => {
                 let obj = {};
                 fields.forEach((field, index) => {
@@ -197,12 +204,13 @@ export async function getFireballEvents(options = {}) {
             
             return result;
         } catch (error) {
-            console.warn(`Fireball Proxy failed: ${getProxyUrl(targetUrl)}`, error);
+            const proxyName = ["CORSPROXY.IO", "ALLORIGINS", "CODETABS"][proxies.indexOf(getProxyUrl)];
+            console.warn(`Fireball Relay [${proxyName}] failed:`, error.name || error.message);
             // Move to next proxy
         }
     }
 
-    throw new Error("Asteroid imagery not available for this ID.");
+    throw new Error("Unable to connect to Fireball Event telemetry. All downlink relays failed.");
 }
 
 // ==========================================
@@ -222,11 +230,9 @@ export async function getSentryVirtualImpactors() {
     
     // Attempt direct fetch first. NASA often allows CORS, JPL often does not.
     const methods = [
-        url => url, // Direct
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        url => `https://thingproxy.freeboard.io/fetch/${url}`,
-        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        url => `https://corsproxy.io/?${encodeURIComponent(url)}`
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
     ];
 
     let lastError = null;
@@ -289,11 +295,9 @@ export async function getSentryObjectDetails(designation) {
     const endpoint = `${SENTRY_BASE_URL}?des=${encodeURIComponent(designation.trim())}`;
     
     const methods = [
-        url => url, // Direct attempt first
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        url => `https://thingproxy.freeboard.io/fetch/${url}`,
-        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        url => `https://corsproxy.io/?${encodeURIComponent(url)}`
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
     ];
 
     let lastError = null;
